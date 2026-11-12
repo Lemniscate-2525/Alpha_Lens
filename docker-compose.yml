@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  alphalens-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alphalens-api
+    restart: always
+    ports:
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - VECTOR_STORE_TYPE=pgvector
+      - DATABASE_URL=postgresql://alphalens:alphalens_secure_pass@postgres:5432/alphalens_db
+      - REDIS_URL=redis://redis:6379/0
+      - MASTER_API_KEY=alpha-lens-master-key-prod-2025
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_RPS=25
+      - RATE_LIMIT_BURST=50
+      - USE_RERANKER=true
+      - ENABLE_EXACT_CACHE=true
+      - ENABLE_SEMANTIC_CACHE=true
+    depends_on:
+      - postgres
+      - redis
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: alphalens-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: alphalens
+      POSTGRES_PASSWORD: alphalens_secure_pass
+      POSTGRES_DB: alphalens_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  redis:
+    image: redis:7-alpine
+    container_name: alphalens-redis
+    restart: always
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+
+volumes:
+  pgdata:
+  redisdata:
