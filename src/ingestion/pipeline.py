@@ -4,7 +4,8 @@ Orchestrates document parsing, hierarchical chunking, batched embedding, and ded
 """
 import time
 import uuid
-from typing import Dict, List, Optional
+from pathlib import Path
+from typing import Dict, List, Optional, Union
 from src.core.models import Document, IngestionJob, JobStatus
 from src.core.exceptions import IngestionError
 from src.ingestion.parsers import FinancialDocumentParser
@@ -86,6 +87,22 @@ class IngestionPipeline:
 
     def get_job_status(self, job_id: str) -> Optional[IngestionJob]:
         return self._jobs.get(job_id)
+
+    def ingest_directory(self, dir_path: Path) -> List[IngestionJob]:
+        """Ingests all JSON raw filing files from a specified directory idempotently."""
+        jobs = []
+        if not dir_path.exists():
+            return jobs
+        for json_path in dir_path.glob("*.json"):
+            try:
+                with open(json_path, "r", encoding="utf-8") as f:
+                    content = f.read()
+                job = self.ingest_document_payload(content)
+                jobs.append(job)
+            except Exception as e:
+                logger.error(f"Failed to ingest file {json_path.name}: {e}")
+        return jobs
+
 
 
 # Global singleton ingestion pipeline
