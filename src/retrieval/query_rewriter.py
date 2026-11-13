@@ -89,3 +89,4 @@ class FinancialQueryRewriter:
             filters["speaker_role"] = SpeakerRole.CEO.value
 
         return filters
+

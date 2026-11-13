@@ -122,3 +122,4 @@ GOLDEN_BENCHMARK_QUERIES: List[EvaluationQuery] = [
         category="unanswerable_rejection"
     )
 ]
+

@@ -129,3 +129,4 @@ class FinancialDocumentParser:
         elif "goldman" in name_lower or "morgan stanley" in name_lower or "ubs" in name_lower or "analyst" in name_lower:
             return SpeakerRole.ANALYST
         return SpeakerRole.EXECUTIVE
+

@@ -19,3 +19,4 @@ async def verify_api_key(
             detail="Unauthorized: Invalid API Key provided in 'X-API-Key' header."
         )
     return x_api_key
+

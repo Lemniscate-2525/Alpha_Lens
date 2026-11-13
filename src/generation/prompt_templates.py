@@ -22,3 +22,4 @@ USER QUERY:
 {query}
 
 Provide your audited financial synthesis with inline citations:"""
+

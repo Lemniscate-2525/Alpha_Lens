@@ -36,3 +36,4 @@ def test_extract_transcript_turns():
 
     qa_turns = [t for t in turns if t["section"] == TranscriptSection.ANALYST_QA]
     assert len(qa_turns) >= 2
+

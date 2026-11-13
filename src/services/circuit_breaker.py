@@ -98,3 +98,4 @@ class CircuitBreaker:
 
 # Global singleton circuit breaker for LLM generation
 llm_circuit_breaker = CircuitBreaker(service_name="LLM_Provider")
+

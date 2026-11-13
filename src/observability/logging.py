@@ -47,3 +47,4 @@ def setup_logger(name: str = "alphalens", level: int = logging.INFO) -> logging.
 
 
 logger = setup_logger()
+

@@ -46,3 +46,4 @@ We adopt **Alternative D (Two-Stage Hybrid + RRF + Cross-Encoder Reranking)**.
 - RRF fusion latency: $\approx 2$ ms.
 - Cross-Encoder scoring (20 pairs): $\approx 45$ ms (batched inference).
 - Total retrieval pipeline latency: $\approx 82$ ms, well within our P95 retrieval SLO target of $\le 350$ ms.
+

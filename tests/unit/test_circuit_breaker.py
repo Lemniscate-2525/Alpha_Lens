@@ -36,3 +36,4 @@ def test_circuit_breaker_transitions():
     cb.record_success()
     assert cb.state == CircuitState.CLOSED
     assert cb.consecutive_failures == 0
+

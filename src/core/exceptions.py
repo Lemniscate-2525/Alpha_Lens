@@ -55,3 +55,4 @@ class UnanswerableQueryError(AlphaLensException):
 class AuthenticationError(AlphaLensException):
     def __init__(self, message: str = "Invalid or missing API key."):
         super().__init__(message, status_code=401)
+

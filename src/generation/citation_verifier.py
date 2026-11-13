@@ -62,3 +62,4 @@ class CitationVerifier:
 
         fidelity = valid_citations_count / max(len(matches), 1)
         return verified_citations, round(fidelity, 2)
+

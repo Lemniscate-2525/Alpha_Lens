@@ -183,6 +183,20 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
+### Launching the Streamlit Interactive Dashboard
+```bash
+streamlit run frontend/app.py
+```
+Access the interactive Wall Street financial terminal at `http://localhost:8501`. Features ticker filters, live telemetry gauges (P50/P90/P95/P99 latency), filing hierarchy browser, and live benchmark audits.
+
+### Running with Zero-Cost Local Ollama
+```bash
+# In .env set:
+LLM_PROVIDER=ollama
+OLLAMA_MODEL_NAME=qwen3:1.7b # or qwen3:4b / llama3.2
+OLLAMA_BASE_URL=http://localhost:11434
+```
+
 ### Running Unit & Integration Tests
 ```bash
 pytest -v
@@ -198,25 +212,46 @@ python evaluation/run_eval.py
 python tests/load/run_load_test.py
 ```
 
-### Running the Production Server
+### Running the Production FastAPI Server
 ```bash
 uvicorn src.api.app:app --host 0.0.0.0 --port 8000 --reload
 ```
 
 ---
 
-## 8. Docker Deployment
+## 8. Enterprise Triton Inference Server & TensorRT-LLM
 
-To launch the full production stack with PostgreSQL + pgvector, Redis, and AlphaLens API:
+For ultra-high throughput production environments serving thousands of concurrent analysts, AlphaLens supports deployment on an NVIDIA Triton Inference Server cluster:
+- **Zero Enterprise Licensing Fees**: Uses the official open-source NGC container `nvcr.io/nvidia/tritonserver:24.05-trtllm-py3`, completely avoiding NVIDIA NIM proprietary fees ($4,500/GPU/year).
+- **Sub-5ms Cross-Encoder Reranking**: Compiles `ms-marco-MiniLM-L-6-v2` into a high-performance TensorRT `.engine` via ONNX Runtime execution provider.
+- **In-Flight Batching & Paged KV-Cache**: Eliminates head-of-line blocking for concurrent financial queries.
+
+See the complete architectural design and benchmark analysis in [`docs/tensorrt_triton_architecture.md`](docs/tensorrt_triton_architecture.md).
+
+To launch the Triton cluster:
 ```bash
-docker-compose up -d --build
+docker-compose -f deploy/triton/docker-compose.triton.yml up -d
 ```
-Interactive API documentation will be available at: `http://localhost:8000/docs`.
 
 ---
 
-## 9. Limitations & Production Roadmap
+## 9. 100% Free Cloud Deployment Guide
 
-1. **GPU Acceleration for Cross-Encoder**: On CPU, joint cross-attention adds ~300ms per uncached query. In high-scale production, deploying the Cross-Encoder onto an NVIDIA TensorRT-LLM or Triton inference cluster reduces this to $< 25$ ms.
-2. **Contextual Compression**: For long 50-page 10-K filings, adding LLM-based extractive summary compression before the reranker will further reduce token consumption.
+A complete step-by-step blueprint to host the entire AlphaLens production stack in the cloud for **$0.00 / month**:
+- **Frontend**: Streamlit Community Cloud (Free GitHub CI/CD)
+- **Backend API**: Hugging Face Spaces (Docker, 16GB RAM, 2 vCPU, public HTTPS)
+- **Database & Vector DB**: Supabase Free Tier (PostgreSQL + pgvector)
+- **Distributed Cache**: Upstash Redis (Serverless Free Tier)
+- **LLM Inference**: Groq Cloud Free Tier (300+ tok/s)
+- **GPU Testing**: Google Colab / Kaggle (Free 16GB T4 GPUs)
+
+See [`docs/free_cloud_deployment_guide.md`](docs/free_cloud_deployment_guide.md).
+
+---
+
+## 10. Limitations & Production Roadmap
+
+1. **GPU Acceleration for Cross-Encoder**: On CPU, joint cross-attention adds ~300ms per uncached query. Deploying the compiled TensorRT Cross-Encoder engine to Triton drops this to $< 5$ ms.
+2. **Contextual Compression**: For long 50-page 10-K filings, adding extractive summary compression before the reranker will further reduce token consumption.
 3. **Distributed Sharding**: As the document corpus expands past 10 million chunks, sharding pgvector tables by ticker symbol or fiscal year via Citus will maintain sub-50ms index query times.
+

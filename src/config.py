@@ -2,11 +2,16 @@
 AlphaLens - Configuration Module
 Centralized, validated configuration using Pydantic Settings.
 """
+import os
 from enum import Enum
 from pathlib import Path
 from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+# Prevent huggingface from making slow network/DNS checks on local cached models
+os.environ["HF_HUB_OFFLINE"] = "1"
+os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 
 class EnvironmentType(str, Enum):
@@ -24,6 +29,8 @@ class VectorStoreType(str, Enum):
 
 class LLMProviderType(str, Enum):
     MOCK = "mock"  # Fast, deterministic for unit tests & offline CI
+    OLLAMA = "ollama"  # Local zero-cost inference via Ollama
+    TRITON = "triton"  # Low-latency TensorRT-LLM on Triton Inference Server
     OPENAI = "openai"
     GROQ = "groq"
     GOOGLE = "google"
@@ -96,13 +103,23 @@ class Settings(BaseSettings):
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT_SECONDS: float = 15.0
 
     # LLM Settings
-    LLM_PROVIDER: LLMProviderType = LLMProviderType.MOCK
-    LLM_MODEL_NAME: str = "gpt-4o-mini"
+    LLM_PROVIDER: LLMProviderType = LLMProviderType.OLLAMA
+    LLM_MODEL_NAME: str = "qwen3:1.7b"
     LLM_TEMPERATURE: float = 0.0
     LLM_MAX_TOKENS: int = 800
-    LLM_REQUEST_TIMEOUT_SECONDS: float = 20.0
+    LLM_REQUEST_TIMEOUT_SECONDS: float = 60.0
 
-    # API Keys
+    # Local Ollama Settings (Zero-Cost Local GPU/CPU)
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL_NAME: str = "qwen3:1.7b"
+    OLLAMA_TIMEOUT_SECONDS: float = 60.0
+
+    # Triton Inference Server / TensorRT-LLM Cluster
+    TRITON_SERVER_URL: str = "http://localhost:8000"
+    TRITON_LLM_MODEL_NAME: str = "tensorrt_llm"
+    TRITON_RERANKER_MODEL_NAME: str = "cross_encoder_trt"
+
+    # API Keys (Optional fallbacks)
     OPENAI_API_KEY: Optional[str] = None
     GROQ_API_KEY: Optional[str] = None
     GOOGLE_API_KEY: Optional[str] = None

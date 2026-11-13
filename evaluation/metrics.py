@@ -74,3 +74,4 @@ class RAGEvaluator:
 
         grounded_count = sum(1 for token in answer_tokens if token in combined_context)
         return round(grounded_count / len(answer_tokens), 2)
+

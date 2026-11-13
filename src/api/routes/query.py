@@ -19,3 +19,4 @@ async def execute_query(
     request_id = getattr(raw_request.state, "request_id", None)
     response = await rag_service.execute_query(request, trace_id=request_id)
     return response
+

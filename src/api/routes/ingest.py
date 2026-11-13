@@ -33,3 +33,4 @@ async def get_job_status(
     if not job:
         raise HTTPException(status_code=404, detail=f"Ingestion job '{job_id}' not found.")
     return job
+

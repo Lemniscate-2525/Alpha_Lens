@@ -1,0 +1,34 @@
+# Triton Inference Server Cluster Deployment
+# Free Open-Source Stack: NGC Container nvcr.io/nvidia/tritonserver:24.05-trtllm-py3
+# No NVIDIA NIM license required ($0 enterprise cost)
+
+version: "3.8"
+
+services:
+  triton-server:
+    image: nvcr.io/nvidia/tritonserver:24.05-trtllm-py3
+    container_name: alphalens-triton
+    restart: unless-stopped
+    shm_size: "16gb"
+    ulimits:
+      memlock: -1
+      stack: 67108864
+    ports:
+      - "8000:8000"   # HTTP REST / v2 API
+      - "8001:8001"   # gRPC API
+      - "8002:8002"   # Prometheus Metrics
+    volumes:
+      - ./model_repository:/models
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+    command: >
+      tritonserver
+      --model-repository=/models
+      --log-verbose=1
+      --strict-model-config=false
+      --exit-on-error=false

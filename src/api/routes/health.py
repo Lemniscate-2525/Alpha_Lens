@@ -28,3 +28,4 @@ async def health_check() -> Dict[str, Any]:
 async def get_metrics() -> Dict[str, Any]:
     """Surfaces real-time system metrics, percentiles (P50, P90, P95, P99), RPS, and costs."""
     return metrics_collector.get_summary()
+

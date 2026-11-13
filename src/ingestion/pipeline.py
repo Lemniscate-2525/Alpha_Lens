@@ -90,3 +90,4 @@ class IngestionPipeline:
 
 # Global singleton ingestion pipeline
 ingestion_pipeline = IngestionPipeline()
+

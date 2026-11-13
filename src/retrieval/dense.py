@@ -35,3 +35,4 @@ class DenseRetriever:
 
 
 dense_retriever = DenseRetriever()
+

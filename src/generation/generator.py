@@ -70,7 +70,13 @@ class LLMGenerator:
         prompt_tokens = estimate_tokens(prompt)
 
         # Dispatch based on provider
-        if self.provider == LLMProviderType.OPENAI and settings.OPENAI_API_KEY:
+        if self.provider == LLMProviderType.OLLAMA:
+            answer = self._generate_ollama(prompt, context_chunks)
+            cost_usd = 0.0  # 100% Free on local hardware
+        elif self.provider == LLMProviderType.TRITON:
+            answer = self._generate_triton(prompt, context_chunks)
+            cost_usd = 0.0  # Self-hosted Triton cluster
+        elif self.provider == LLMProviderType.OPENAI and settings.OPENAI_API_KEY:
             answer = self._generate_openai(prompt)
         elif self.provider == LLMProviderType.GROQ and settings.GROQ_API_KEY:
             answer = self._generate_groq(prompt)
@@ -91,11 +97,14 @@ class LLMGenerator:
     def _generate_deterministic_synthesis(
         self,
         query: str,
-        context_chunks: List[SearchResult]
+        context_chunks: List[SearchResult] = None
     ) -> str:
         """
         Synthesizes an audited, grounded response directly from retrieved chunks for offline benchmarking.
         """
+        if not context_chunks:
+            return "INFORMATION_NOT_DISCLOSED_IN_FILINGS: No relevant filing passages found."
+
         query_lower = query.lower()
         top_chunk = context_chunks[0]
 
@@ -167,4 +176,62 @@ class LLMGenerator:
             raise
 
 
+    def _generate_ollama(self, prompt: str, context_chunks: List[SearchResult] = None) -> str:
+        """Invokes local Ollama instance via HTTP API without requiring external API keys."""
+        import httpx
+        import re
+        url = f"{settings.OLLAMA_BASE_URL.rstrip('/')}/api/chat"
+        payload = {
+            "model": settings.OLLAMA_MODEL_NAME,
+            "messages": [
+                {"role": "system", "content": FINANCIAL_RAG_SYSTEM_PROMPT + "\nDirectly output the audited answer with [1], [2] citations. Do not include reasoning or think tags."},
+                {"role": "user", "content": prompt}
+            ],
+            "stream": False,
+            "options": {
+                "temperature": 0.0,
+                "num_predict": 450,
+            }
+        }
+        try:
+            with httpx.Client(timeout=120.0) as client:
+                resp = client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                raw_content = data.get("message", {}).get("content", "").strip()
+                # Strip thinking tags (closed or unclosed if truncated)
+                clean = re.sub(r"<think>.*?(?:</think>|$)", "", raw_content, flags=re.DOTALL).strip()
+                if clean:
+                    return clean
+                if raw_content and "<think>" not in raw_content:
+                    return raw_content
+                logger.warning("Ollama output contained only thinking tokens; using deterministic synthesis.")
+                return self._generate_deterministic_synthesis(prompt, context_chunks or [])
+        except Exception as e:
+            logger.error(f"Ollama generation failed ({e}), falling back to grounded synthesis.")
+            return self._generate_deterministic_synthesis(prompt, context_chunks or [])
+
+    def _generate_triton(self, prompt: str, context_chunks: List[SearchResult] = None) -> str:
+        """Invokes Triton Inference Server with TensorRT-LLM backend via v2 kserve HTTP API."""
+        import httpx
+        url = f"{settings.TRITON_SERVER_URL.rstrip('/')}/v2/models/{settings.TRITON_LLM_MODEL_NAME}/generate"
+        payload = {
+            "text_input": f"{FINANCIAL_RAG_SYSTEM_PROMPT}\n\n{prompt}",
+            "max_tokens": settings.LLM_MAX_TOKENS,
+            "temperature": settings.LLM_TEMPERATURE,
+            "bad_words": "",
+            "stop_words": ""
+        }
+        try:
+            with httpx.Client(timeout=settings.LLM_REQUEST_TIMEOUT_SECONDS) as client:
+                resp = client.post(url, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                return data.get("text_output", "").strip()
+        except Exception as e:
+            logger.error(f"Triton generation failed ({e}), falling back to grounded synthesis.")
+            return self._generate_deterministic_synthesis(prompt, context_chunks or [])
+
+
 llm_generator = LLMGenerator()
+

@@ -66,3 +66,4 @@ def test_ingest_and_query_flow():
     assert "answer" in res_data
     assert len(res_data["search_results"]) > 0
     assert "latency_ms" in res_data
+

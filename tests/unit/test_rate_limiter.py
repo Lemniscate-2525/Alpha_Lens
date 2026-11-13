@@ -35,3 +35,4 @@ def test_rate_limiter_service_exception():
         service.check_rate_limit(client_id)
 
     assert exc_info.value.status_code == 429
+

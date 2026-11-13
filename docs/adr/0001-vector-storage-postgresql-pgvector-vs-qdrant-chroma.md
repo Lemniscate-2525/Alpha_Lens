@@ -44,3 +44,4 @@ We adopt a **Unified Storage Architecture**:
 - Eliminates dual-write bugs and distributed transaction overhead.
 - Simplifies backup, migration, and local development.
 - Bound to PostgreSQL resource limits; if vector corpus ever exceeds 20M vectors, we can partition by ticker or shard via Citus.
+

@@ -97,3 +97,4 @@ We define measurable, verifiable Service Level Indicators (SLIs) and Service Lev
     * Actual LLM queries: $234,000$ queries.
   * Direct dollar cost reduction: $\approx 35\%$ cost reduction.
 * Target cost per served query: $\le \$0.0035$.
+

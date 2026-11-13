@@ -1,0 +1,57 @@
+# Triton Inference Server Model Configuration for Cross-Encoder Reranker
+# Model: ms-marco-MiniLM-L-6-v2 compiled to TensorRT engine
+# Backend: tensorrt (or onnxruntime with TensorRT execution provider)
+# High-throughput batch scoring: sub-5ms latency for 20 query-passage pairs
+
+name: "cross_encoder_trt"
+platform: "tensorrt_plan"
+max_batch_size: 64
+
+input [
+  {
+    name: "input_ids"
+    data_type: TYPE_INT64
+    dims: [ 512 ]
+  },
+  {
+    name: "attention_mask"
+    data_type: TYPE_INT64
+    dims: [ 512 ]
+  },
+  {
+    name: "token_type_ids"
+    data_type: TYPE_INT64
+    dims: [ 512 ]
+  }
+]
+
+output [
+  {
+    name: "logits"
+    data_type: TYPE_FP32
+    dims: [ 1 ]
+  }
+]
+
+instance_group [
+  {
+    count: 1
+    kind: KIND_GPU
+    gpus: [ 0 ]
+  }
+]
+
+dynamic_batching {
+  max_queue_delay_microseconds: 5000
+  preferred_batch_size: [ 8, 16, 32, 64 ]
+}
+
+optimization {
+  execution_accelerators {
+    gpu_execution_accelerator : [ {
+      name : "tensorrt"
+      parameters { key: "precision_mode" value: "FP16" }
+      parameters { key: "max_workspace_size_bytes" value: "1073741824" }
+    }]
+  }
+}

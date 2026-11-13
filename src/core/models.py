@@ -158,3 +158,4 @@ class EvaluationMetrics(BaseModel):
     unanswerable_detection_accuracy: float
     avg_latency_ms: float
     total_evaluated: int
+

@@ -34,3 +34,4 @@ def test_exact_cache_put_and_get():
     cached = cache.get_exact(exact_key)
     assert cached is not None
     assert cached.answer == "test answer"
+

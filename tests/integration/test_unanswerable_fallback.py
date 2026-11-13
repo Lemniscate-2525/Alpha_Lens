@@ -24,3 +24,4 @@ def test_unanswerable_query_returns_structured_fallback():
 
     assert data["is_unanswerable"] is True
     assert "INFORMATION_NOT_DISCLOSED_IN_FILINGS" in data["answer"]
+

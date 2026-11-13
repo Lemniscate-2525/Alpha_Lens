@@ -134,3 +134,4 @@ class MetricsCollector:
 
 # Global singleton metrics collector
 metrics_collector = MetricsCollector()
+

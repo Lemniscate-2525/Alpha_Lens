@@ -36,3 +36,4 @@ Transcripts are split by conversational turn:
    - Each chunk receives a deterministic ID: `SHA-256(doc_id + chunk_index + chunk_content)`.
    - If a document is re-ingested with identical content, the worker detects the existing hash and skips re-embedding, guaranteeing strict idempotency.
    - If a document is updated, the previous version's chunks are atomically soft-deprecated or pruned in the vector store before new chunks are committed.
+

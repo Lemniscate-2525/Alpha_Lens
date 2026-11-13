@@ -50,3 +50,4 @@ User Query
 Adopt the Two-Tier Caching architecture with singleflight stampede prevention.
 - Expected cache hit rate during peak earnings: $30 - 45\%$.
 - Directly lowers P95/P99 latency and protects downstream LLM rate limits.
+

@@ -22,3 +22,4 @@ def test_rrf_scoring_logic():
     # RRF score for rank 1: 1 / (60 + 1) = 1/61 = 0.01639
     score_rank_1 = 1.0 / (60 + 1)
     assert round(score_rank_1, 5) == 0.01639
+

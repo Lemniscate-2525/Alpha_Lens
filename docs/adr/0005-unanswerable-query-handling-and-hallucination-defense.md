@@ -34,3 +34,4 @@ Adopt strict three-stage hallucination defense:
 1. Pre-generation relevance gating based on reranker scores.
 2. Prompt contract with explicit fallback instruction.
 3. Post-generation citation parser and verification check.
+
