@@ -46,8 +46,8 @@ class RAGService:
         # Step 2: Two-Tier Cache Check
         exact_key = cache_service.compute_exact_key(request.query, active_filters)
 
-        if request.use_semantic_cache and settings.ENABLE_EXACT_CACHE:
-            cached_resp = cache_service.get_exact(exact_key)
+        if request.use_semantic_cache and (settings.ENABLE_EXACT_CACHE and settings.EXACT_CACHE_ENABLED):
+            cached_resp = await cache_service.get_exact(exact_key)
             if cached_resp:
                 e2e_ms = (time.perf_counter() - start_time) * 1000.0
                 cached_resp.latency_ms = round(e2e_ms, 2)
@@ -64,8 +64,8 @@ class RAGService:
                 )
                 return cached_resp
 
-        if request.use_semantic_cache and settings.ENABLE_SEMANTIC_CACHE:
-            sem_result = cache_service.get_semantic(request.query, active_filters)
+        if request.use_semantic_cache and (settings.ENABLE_SEMANTIC_CACHE and settings.SEMANTIC_CACHE_ENABLED):
+            sem_result = await cache_service.get_semantic(request.query, active_filters)
             if sem_result:
                 cached_resp, cos_sim = sem_result
                 e2e_ms = (time.perf_counter() - start_time) * 1000.0
@@ -83,23 +83,12 @@ class RAGService:
                 )
                 return cached_resp
 
-        # Step 3: Singleflight Stampede Protection
-        lock = await cache_service.singleflight.get_lock(exact_key)
-        async with lock:
-            # Re-check exact cache in case a concurrent request already populated it while we waited
-            if request.use_semantic_cache and settings.ENABLE_EXACT_CACHE:
-                cached_resp = cache_service.get_exact(exact_key)
-                if cached_resp:
-                    e2e_ms = (time.perf_counter() - start_time) * 1000.0
-                    cached_resp.latency_ms = round(e2e_ms, 2)
-                    cached_resp.cache_hit_type = "exact"
-                    cached_resp.trace_id = trace_id
-                    return cached_resp
-
-            # Step 4: Hybrid Retrieval
+        # Step 3: Singleflight Distributed Request Coalescing
+        async def _execute_rag_pipeline() -> QueryResponse:
             t_retrieval_start = time.perf_counter()
             expanded_query = FinancialQueryRewriter.expand_query(request.query)
 
+            # Step 4: Hybrid Retrieval
             candidates = hybrid_retriever.retrieve(
                 query=expanded_query,
                 top_k=settings.FUSED_TOP_K,
@@ -140,7 +129,7 @@ class RAGService:
 
             e2e_ms = (time.perf_counter() - start_time) * 1000.0
 
-            response = QueryResponse(
+            pipeline_resp = QueryResponse(
                 query=request.query,
                 answer=answer,
                 citations=citations,
@@ -156,9 +145,9 @@ class RAGService:
                 trace_id=trace_id
             )
 
-            # Step 8: Update Two-Tier Cache
+            # Step 8: Update Two-Tier Cache before releasing lock
             if request.use_semantic_cache and not is_unanswerable:
-                cache_service.set(request.query, active_filters, response)
+                await cache_service.set(request.query, active_filters, pipeline_resp)
 
             # Record system metrics
             metrics_collector.record_query(
@@ -170,8 +159,43 @@ class RAGService:
                 tokens_used=tokens,
                 cost_usd=cost
             )
+            return pipeline_resp
 
-            return response
+        response, is_leader = await cache_service.singleflight.execute_or_wait(
+            exact_key=exact_key,
+            leader_fn=_execute_rag_pipeline,
+            cache_getter=lambda: cache_service.get_exact(exact_key)
+        )
+        return response
+
+    def answer(
+        self,
+        query: str,
+        ticker: Optional[str] = None,
+        fiscal_quarter: Optional[str] = None,
+        fiscal_year: Optional[str] = None,
+        top_k: int = 5,
+        use_reranker: bool = True
+    ) -> QueryResponse:
+        """Synchronous wrapper for UI/interactive execution."""
+        request = QueryRequest(
+            query=query,
+            ticker=ticker,
+            fiscal_quarter=fiscal_quarter,
+            fiscal_year=fiscal_year,
+            top_k=top_k,
+            use_reranker=use_reranker
+        )
+        try:
+            loop = asyncio.get_event_loop()
+            if loop.is_running():
+                import concurrent.futures
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(lambda: asyncio.run(self.execute_query(request))).result()
+            return loop.run_until_complete(self.execute_query(request))
+        except RuntimeError:
+            return asyncio.run(self.execute_query(request))
+
 
 
 rag_service = RAGService()

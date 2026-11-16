@@ -79,6 +79,16 @@ def create_app() -> FastAPI:
     @app.on_event("startup")
     async def startup_event():
         logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} initialized successfully.")
+        from src.infrastructure.redis_client import redis_manager
+        from src.workers.queue_service import ingestion_queue
+        await redis_manager.check_health()
+        await ingestion_queue.ensure_consumer_group()
+
+    @app.on_event("shutdown")
+    async def shutdown_event():
+        logger.info("Shutting down AlphaLens API...")
+        from src.infrastructure.redis_client import redis_manager
+        await redis_manager.close()
 
     return app
 

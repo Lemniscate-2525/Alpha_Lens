@@ -95,3 +95,4 @@ def render_benchmark_view(rag_service):
                     </div>""",
                     unsafe_allow_html=True
                 )
+

@@ -1,7 +1,12 @@
 """
 AlphaLens - Sparse Lexical Retrieval (BM25Okapi)
 Implements BM25 search over financial chunks with entity-preserving tokenization.
+Features shared index synchronization across independent workers and API instances.
 """
+
+import json
+import os
+from pathlib import Path
 import re
 from typing import Any, Dict, List, Optional
 from rank_bm25 import BM25Okapi
@@ -18,6 +23,9 @@ class SparseBM25Retriever:
         self.corpus_chunks: List[Chunk] = []
         self.tokenized_corpus: List[List[str]] = []
         self.bm25: Optional[BM25Okapi] = None
+        self.corpus_file = Path("data/bm25_corpus.json")
+        self.last_loaded_mtime: float = 0.0
+        self._load_from_disk_if_present()
 
     @staticmethod
     def tokenize(text: str) -> List[str]:
@@ -30,8 +38,38 @@ class SparseBM25Retriever:
         tokens = re.findall(r"[\$\€\£]?\d+(?:\.\d+)?%?|[a-z0-9]+(?:[\-_][a-z0-9]+)*", text)
         return tokens
 
+    def _load_from_disk_if_present(self) -> None:
+        """Loads chunks from shared disk storage if available."""
+        if not self.corpus_file.exists():
+            return
+        try:
+            mtime = self.corpus_file.stat().st_mtime
+            if mtime <= self.last_loaded_mtime and self.bm25 is not None:
+                return
+
+            with open(self.corpus_file, "r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            loaded_chunks = [Chunk.model_validate(item) for item in data]
+            existing_ids = {c.chunk_id for c in self.corpus_chunks}
+            new_chunks = [c for c in loaded_chunks if c.chunk_id not in existing_ids and not c.is_parent]
+
+            if new_chunks:
+                self.corpus_chunks.extend(new_chunks)
+                new_tokens = [self.tokenize(c.content) for c in new_chunks]
+                self.tokenized_corpus.extend(new_tokens)
+                self.bm25 = BM25Okapi(self.tokenized_corpus)
+                logger.info(f"Synchronized BM25 index from disk: total {len(self.corpus_chunks)} chunks.")
+            self.last_loaded_mtime = mtime
+        except Exception as e:
+            logger.warning(f"Failed to synchronize BM25 index from disk: {e}")
+
+    def sync_if_needed(self) -> None:
+        """Checks shared corpus file on disk and reloads if updated by a background worker."""
+        self._load_from_disk_if_present()
+
     def index_chunks(self, chunks: List[Chunk]) -> None:
-        """Adds or updates chunks in the BM25 index."""
+        """Adds or updates chunks in the BM25 index and persists to shared storage."""
         # Append only new chunk_ids
         existing_ids = {c.chunk_id for c in self.corpus_chunks}
         new_chunks = [c for c in chunks if c.chunk_id not in existing_ids and not c.is_parent]
@@ -47,12 +85,26 @@ class SparseBM25Retriever:
         self.bm25 = BM25Okapi(self.tokenized_corpus)
         logger.info(f"Rebuilt BM25 index with total {len(self.corpus_chunks)} chunks.")
 
+        # Persist to shared disk for cross-process visibility
+        try:
+            self.corpus_file.parent.mkdir(parents=True, exist_ok=True)
+            serializable = [c.model_dump(mode="json") for c in self.corpus_chunks]
+            # Write atomically using temp file rename
+            temp_path = self.corpus_file.with_suffix(".tmp")
+            with open(temp_path, "w", encoding="utf-8") as f:
+                json.dump(serializable, f)
+            temp_path.replace(self.corpus_file)
+            self.last_loaded_mtime = self.corpus_file.stat().st_mtime
+        except Exception as e:
+            logger.error(f"Failed to persist shared BM25 corpus to {self.corpus_file}: {e}")
+
     def retrieve(
         self,
         query: str,
         top_k: int = None,
         filters: Optional[Dict[str, Any]] = None
     ) -> List[SearchResult]:
+        self.sync_if_needed()
         if not self.bm25 or not self.corpus_chunks:
             return []
 
@@ -104,9 +156,10 @@ class SparseBM25Retriever:
                     "ticker": chunk.ticker,
                     "fiscal_quarter": chunk.fiscal_quarter,
                     "fiscal_year": chunk.fiscal_year,
-                    "speaker_name": chunk.speaker_name or "",
-                    "speaker_role": chunk.speaker_role.value if chunk.speaker_role else "",
+                    "document_type": chunk.document_type.value,
                     "section": chunk.section.value,
+                    "speaker_name": chunk.speaker_name,
+                    "speaker_role": chunk.speaker_role.value if chunk.speaker_role else None,
                 }
             ))
 
@@ -114,4 +167,3 @@ class SparseBM25Retriever:
 
 
 bm25_retriever = SparseBM25Retriever()
-

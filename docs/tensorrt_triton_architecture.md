@@ -137,3 +137,4 @@ The model is served via Triton's `tensorrt_plan` engine with dynamic batching (`
 | **Local Development** | Ollama (`qwen3:1.7b` / `qwen3:4b`) | PC (CPU / Consumer GPU) | $0.00 | Instant developer loop, zero cloud dependencies, offline capable. |
 | **Free Cloud Prototype** | Groq Free API / Google Colab T4 | Cloud Serverless / Free T4 GPU | $0.00 | Ultra-fast evaluation without hardware costs. |
 | **Production Enterprise** | Triton + TensorRT-LLM (NGC Container) | NVIDIA A10G / L4 / H100 | Cloud GPU compute only | Maximum tokens/sec/$, sub-150ms P95 latency, enterprise concurrency. |
+

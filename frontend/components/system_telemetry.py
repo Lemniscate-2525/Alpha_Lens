@@ -124,3 +124,4 @@ def render_system_telemetry(rag_service):
             </div>""",
             unsafe_allow_html=True
         )
+

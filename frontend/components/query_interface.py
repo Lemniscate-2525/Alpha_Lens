@@ -184,3 +184,4 @@ def render_query_interface(rag_service):
             except Exception as e:
                 st.error(f"Execution Error: {str(e)}")
                 st.exception(e)
+

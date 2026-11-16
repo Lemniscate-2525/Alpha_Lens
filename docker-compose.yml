@@ -1,29 +1,21 @@
 version: '3.8'
 
 services:
-  alphalens-api:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: alphalens-api
+  redis:
+    image: redis:7-alpine
+    container_name: alphalens-redis
     restart: always
+    command: redis-server --appendonly yes --save 60 1 --maxmemory 512mb --maxmemory-policy volatile-lru
     ports:
-      - "8000:8000"
-    environment:
-      - ENVIRONMENT=production
-      - VECTOR_STORE_TYPE=pgvector
-      - DATABASE_URL=postgresql://alphalens:alphalens_secure_pass@postgres:5432/alphalens_db
-      - REDIS_URL=redis://redis:6379/0
-      - MASTER_API_KEY=alpha-lens-master-key-prod-2025
-      - RATE_LIMIT_ENABLED=true
-      - RATE_LIMIT_RPS=25
-      - RATE_LIMIT_BURST=50
-      - USE_RERANKER=true
-      - ENABLE_EXACT_CACHE=true
-      - ENABLE_SEMANTIC_CACHE=true
-    depends_on:
-      - postgres
-      - redis
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 3s
 
   postgres:
     image: pgvector/pgvector:pg16
@@ -37,17 +29,90 @@ services:
       - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U alphalens -d alphalens_db"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+      start_period: 5s
 
-  redis:
-    image: redis:7-alpine
-    container_name: alphalens-redis
+  alphalens-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alphalens-api
     restart: always
     ports:
-      - "6379:6379"
+      - "8000:8000"
+    environment:
+      - ENVIRONMENT=production
+      - VECTOR_STORE_TYPE=chroma
+      - DATABASE_URL=postgresql://alphalens:alphalens_secure_pass@postgres:5432/alphalens_db
+      - REDIS_URL=redis://redis:6379/0
+      - MASTER_API_KEY=alpha-lens-master-key-prod-2025
+      - RATE_LIMIT_ENABLED=true
+      - RATE_LIMIT_CAPACITY=50
+      - RATE_LIMIT_REFILL_RATE=25
+      - RATE_LIMIT_WINDOW_SECONDS=60
+      - USE_RERANKER=true
+      - EXACT_CACHE_ENABLED=true
+      - SEMANTIC_CACHE_ENABLED=true
+      - SINGLEFLIGHT_LEASE_MS=30000
     volumes:
-      - redisdata:/data
+      - appdata:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:8000/api/v1/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+
+  ingestion-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alphalens-worker
+    restart: always
+    command: ["python", "-m", "src.workers.ingestion_worker"]
+    environment:
+      - ENVIRONMENT=production
+      - VECTOR_STORE_TYPE=chroma
+      - DATABASE_URL=postgresql://alphalens:alphalens_secure_pass@postgres:5432/alphalens_db
+      - REDIS_URL=redis://redis:6379/0
+      - INGESTION_WORKER_CONCURRENCY=2
+      - INGESTION_MAX_RETRIES=3
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      redis:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: alphalens-frontend
+    restart: always
+    command: ["streamlit", "run", "frontend/app.py", "--server.port", "8501", "--server.address", "0.0.0.0"]
+    ports:
+      - "8501:8501"
+    environment:
+      - ENVIRONMENT=production
+      - REDIS_URL=redis://redis:6379/0
+      - BACKEND_API_URL=http://alphalens-api:8000
+    volumes:
+      - appdata:/app/data
+    depends_on:
+      - alphalens-api
 
 volumes:
-  pgdata:
   redisdata:
-
+  pgdata:
+  appdata:

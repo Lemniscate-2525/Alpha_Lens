@@ -101,3 +101,4 @@ def render_filings_browser(rag_service):
 
     with tab2:
         st.json(doc_data)
+

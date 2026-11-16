@@ -17,7 +17,8 @@ def test_exact_cache_key_generation():
     assert key1 != key3
 
 
-def test_exact_cache_put_and_get():
+@pytest.mark.asyncio
+async def test_exact_cache_put_and_get():
     cache = TwoTierCacheService()
     dummy_resp = QueryResponse(
         query="test query",
@@ -31,7 +32,7 @@ def test_exact_cache_put_and_get():
     exact_key = cache.compute_exact_key("test query", {"ticker": "NVDA"})
     cache.exact_cache[exact_key] = (dummy_resp, 9999999999.0)
 
-    cached = cache.get_exact(exact_key)
+    cached = await cache.get_exact(exact_key)
     assert cached is not None
     assert cached.answer == "test answer"
 

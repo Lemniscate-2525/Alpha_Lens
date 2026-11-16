@@ -185,3 +185,4 @@ html, body, [class*="css"] {
 def divider_html() -> str:
     """Returns a clean HTML divider without using markdown hyphens."""
     return '<div class="custom-divider"></div>'
+

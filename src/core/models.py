@@ -75,6 +75,32 @@ class SearchResult(BaseModel):
     retrieval_type: str  # "dense", "sparse", "fused", "reranked"
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
+    @property
+    def ticker(self) -> str:
+        return self.metadata.get("ticker", "")
+
+    @property
+    def fiscal_period(self) -> str:
+        q = self.metadata.get("fiscal_quarter", "")
+        y = self.metadata.get("fiscal_year", "")
+        return f"{q} {y}".strip()
+
+    @property
+    def doc_type(self) -> str:
+        return self.metadata.get("document_type", "transcript")
+
+    @property
+    def speaker(self) -> Optional[str]:
+        return self.metadata.get("speaker_name")
+
+    @property
+    def role(self) -> Optional[str]:
+        return self.metadata.get("speaker_role")
+
+    @property
+    def section(self) -> str:
+        return self.metadata.get("section", "GENERAL")
+
 
 class Citation(BaseModel):
     chunk_id: str
@@ -86,6 +112,18 @@ class Citation(BaseModel):
     section: Optional[str] = None
     quote_snippet: str
     confidence_score: float = 1.0
+
+    @property
+    def citation_id(self) -> str:
+        return self.chunk_id[:6]
+
+    @property
+    def document_title(self) -> str:
+        return f"{self.ticker} {self.fiscal_quarter} {self.fiscal_year}"
+
+    @property
+    def snippet_text(self) -> str:
+        return self.quote_snippet
 
 
 class QueryRequest(BaseModel):
@@ -115,12 +153,28 @@ class QueryResponse(BaseModel):
     estimated_cost_usd: float = 0.0
     trace_id: Optional[str] = None
 
+    @property
+    def total_latency_ms(self) -> float:
+        return self.latency_ms
+
+    @property
+    def is_cache_hit(self) -> bool:
+        return self.cache_hit_type is not None
+
+    @property
+    def context_chunks(self) -> List[SearchResult]:
+        return self.search_results
+
+
 
 class JobStatus(str, Enum):
     PENDING = "pending"
+    QUEUED = "queued"
     PROCESSING = "processing"
     COMPLETED = "completed"
     FAILED = "failed"
+    RETRYING = "retrying"
+    DEAD_LETTER = "dead_letter"
     SKIPPED_EXISTING = "skipped_existing"
 
 
@@ -129,12 +183,19 @@ class IngestionJob(BaseModel):
     document_id: str
     ticker: str
     status: JobStatus = JobStatus.PENDING
+    stage: str = "PENDING"
+    progress: int = 0
     total_parent_chunks: int = 0
     total_child_chunks: int = 0
     processing_time_ms: float = 0.0
+    retry_count: int = 0
     error: Optional[str] = None
+    worker_id: Optional[str] = None
+    message: Optional[str] = None
     created_at: datetime = Field(default_factory=datetime.utcnow)
+    started_at: Optional[datetime] = None
     completed_at: Optional[datetime] = None
+
 
 
 class EvaluationQuery(BaseModel):

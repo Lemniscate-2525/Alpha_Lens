@@ -23,11 +23,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
 
         # Admission control / Rate limit check (bypass for health/metrics)
         path = request.url.path
+        rate_limit_res = None
         if not path.startswith("/api/v1/health") and not path.startswith("/api/v1/metrics"):
             client_ip = request.client.host if request.client else "unknown_client"
             client_id = request.headers.get("X-API-Key", client_ip)
             try:
-                rate_limiter.check_rate_limit(client_id=client_id)
+                rate_limit_res = await rate_limiter.check_rate_limit_async(client_id=client_id)
             except RateLimitExceededError as e:
                 return JSONResponse(
                     status_code=429,
@@ -37,7 +38,12 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
                         "retry_after_seconds": e.retry_after,
                         "request_id": request_id,
                     },
-                    headers={"Retry-After": str(e.retry_after), "X-Request-ID": request_id}
+                    headers={
+                        "Retry-After": str(e.retry_after),
+                        "X-Request-ID": request_id,
+                        "X-RateLimit-Limit": str(rate_limiter.capacity),
+                        "X-RateLimit-Remaining": "0"
+                    }
                 )
 
         try:
@@ -52,5 +58,9 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         duration_ms = (time.perf_counter() - start_time) * 1000.0
         response.headers["X-Request-ID"] = request_id
         response.headers["X-Response-Time-Ms"] = f"{duration_ms:.2f}"
+        if rate_limit_res:
+            response.headers["X-RateLimit-Limit"] = str(rate_limit_res.limit)
+            response.headers["X-RateLimit-Remaining"] = str(int(rate_limit_res.remaining))
+            response.headers["X-RateLimit-Reset"] = str(int(rate_limit_res.retry_after))
         return response
 

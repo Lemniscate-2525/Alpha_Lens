@@ -13,13 +13,16 @@ router = APIRouter(tags=["Observability"])
 
 @router.get("/health")
 async def health_check() -> Dict[str, Any]:
-    """Liveness probe verifying that the API and vector store are operational."""
+    """Liveness probe verifying that the API, Redis, and vector store are operational."""
+    from src.infrastructure.redis_client import redis_manager
+    redis_healthy = await redis_manager.check_health()
     chunk_count = vector_store.count()
     return {
-        "status": "healthy",
+        "status": "healthy" if redis_healthy else "degraded",
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.ENVIRONMENT.value,
+        "redis_connected": redis_healthy,
         "indexed_chunks": chunk_count,
     }
 

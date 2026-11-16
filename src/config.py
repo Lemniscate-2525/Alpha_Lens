@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     VECTOR_STORE_TYPE: VectorStoreType = VectorStoreType.MEMORY
     DATABASE_URL: str = "sqlite+aiosqlite:///data/alphalens.db"
     REDIS_URL: Optional[str] = "redis://localhost:6379/0"
+    REDIS_MAX_CONNECTIONS: int = 50
+    REDIS_SOCKET_TIMEOUT: float = 5.0
+    REDIS_CONNECT_TIMEOUT: float = 5.0
+    REDIS_KEY_PREFIX: str = "alpha_lens"
 
     # Embedding Model
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
@@ -87,16 +91,41 @@ class Settings(BaseSettings):
 
     # Caching Parameters
     ENABLE_EXACT_CACHE: bool = True
-    ENABLE_SEMANTIC_CACHE: bool = True
+    EXACT_CACHE_ENABLED: bool = True
     EXACT_CACHE_TTL_SECONDS: int = 3600  # 1 hour
+    EXACT_CACHE_PREFIX: str = "alpha_lens:cache:exact"
+    ENABLE_SEMANTIC_CACHE: bool = True
+    SEMANTIC_CACHE_ENABLED: bool = True
     SEMANTIC_CACHE_COSINE_THRESHOLD: float = 0.94
+    SEMANTIC_CACHE_THRESHOLD: float = 0.94
+    SEMANTIC_CACHE_TTL_SECONDS: int = 3600
+    SEMANTIC_CACHE_PREFIX: str = "alpha_lens:cache:semantic"
     SEMANTIC_CACHE_MAX_ENTRIES: int = 1000
+
+    # Singleflight Distributed Mutex Parameters
+    SINGLEFLIGHT_LEASE_MS: int = 30000  # 30-second lock lease
+    SINGLEFLIGHT_WAIT_TIMEOUT_SECONDS: float = 35.0  # Max waiting period for waiters
+    SINGLEFLIGHT_POLL_INTERVAL_MS: int = 50
 
     # Rate Limiting & Concurrency
     RATE_LIMIT_ENABLED: bool = True
-    RATE_LIMIT_RPS: int = 25
+    RATE_LIMIT_CAPACITY: int = 50
     RATE_LIMIT_BURST: int = 50
+    RATE_LIMIT_REFILL_RATE: float = 25.0
+    RATE_LIMIT_RPS: int = 25
+    RATE_LIMIT_WINDOW_SECONDS: int = 60
+    RATE_LIMIT_KEY_PREFIX: str = "alpha_lens:ratelimit"
+    RATE_LIMIT_FAIL_CLOSED: bool = True
     MAX_CONCURRENT_LLM_REQUESTS: int = 20
+
+    # Asynchronous Ingestion Queue & Worker Parameters
+    INGESTION_QUEUE_NAME: str = "alpha_lens:queue:ingestion"
+    INGESTION_DEAD_LETTER_QUEUE: str = "alpha_lens:queue:ingestion:dead_letter"
+    INGESTION_CONSUMER_GROUP: str = "alpha_lens_workers"
+    INGESTION_MAX_RETRIES: int = 3
+    INGESTION_WORKER_CONCURRENCY: int = 2
+    INGESTION_JOB_TIMEOUT_SECONDS: int = 1800
+
 
     # Circuit Breaker Parameters
     CIRCUIT_BREAKER_FAILURE_THRESHOLD: int = 5

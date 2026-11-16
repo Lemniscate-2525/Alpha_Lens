@@ -194,7 +194,8 @@ class LLMGenerator:
             }
         }
         try:
-            with httpx.Client(timeout=120.0) as client:
+            timeout_cfg = httpx.Timeout(timeout=settings.OLLAMA_TIMEOUT_SECONDS, connect=2.0)
+            with httpx.Client(timeout=timeout_cfg) as client:
                 resp = client.post(url, json=payload)
                 resp.raise_for_status()
                 data = resp.json()

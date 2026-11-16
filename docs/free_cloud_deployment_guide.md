@@ -150,3 +150,4 @@ To test the Triton Inference Server and compile the TensorRT cross-encoder witho
 - LLM Inference (Groq Free Tier): **$0.00 / month**
 - Evaluation & GPU Testing (Colab T4): **$0.00 / month**
 - **Total Operational Cost: $0.00 / month**
+

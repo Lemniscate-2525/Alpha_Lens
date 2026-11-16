@@ -32,3 +32,4 @@ services:
       --log-verbose=1
       --strict-model-config=false
       --exit-on-error=false
+
