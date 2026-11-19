@@ -1,17 +1,24 @@
 """
 Benchmark & Evaluation Viewer Component for AlphaLens.
 Displays golden dataset benchmark results comparing Baseline vs Advanced RAG,
-evaluation metrics (Recall@K, MRR, Faithfulness), and test case audits.
-Note: Strict compliance with no long hyphens rule.
+evaluation metrics (Recall@K, MRR, Faithfulness), and enables live audit queries via the backend API.
+Rule: Zero backend model or module imports, no long hyphens.
 """
 
 import streamlit as st
 import json
 from pathlib import Path
 from frontend.styles import divider_html
+from frontend.api_client import (
+    api_client as default_api_client,
+    AlphaLensAPIError,
+    APIConnectionError,
+    APIAuthenticationError
+)
 
 
-def render_benchmark_view(rag_service):
+def render_benchmark_view(client=None):
+    api = client or default_api_client
     st.subheader("RAG Evaluation Benchmark Suite")
     st.caption("Empirical measurements across Golden Dataset queries comparing Baseline vs Advanced Hybrid RAG.")
 
@@ -20,7 +27,7 @@ def render_benchmark_view(rag_service):
 
     with col1:
         st.markdown(
-            f"""<div class="metric-card">
+            """<div class="metric-card">
                 <div class="metric-label">Recall@1 Lift</div>
                 <div class="metric-value">0.750 <span style="font-size:14px; color:#10b981;">(+28.6%)</span></div>
                 <div class="metric-delta">Baseline: 0.583</div>
@@ -30,7 +37,7 @@ def render_benchmark_view(rag_service):
 
     with col2:
         st.markdown(
-            f"""<div class="metric-card">
+            """<div class="metric-card">
                 <div class="metric-label">Mean Reciprocal Rank (MRR)</div>
                 <div class="metric-value">0.833 <span style="font-size:14px; color:#10b981;">(+15.4%)</span></div>
                 <div class="metric-delta">Baseline: 0.722</div>
@@ -40,7 +47,7 @@ def render_benchmark_view(rag_service):
 
     with col3:
         st.markdown(
-            f"""<div class="metric-card">
+            """<div class="metric-card">
                 <div class="metric-label">Answer Faithfulness</div>
                 <div class="metric-value">0.960 <span style="font-size:14px; color:#10b981;">(+18.5%)</span></div>
                 <div class="metric-delta">Zero Hallucinations</div>
@@ -50,7 +57,7 @@ def render_benchmark_view(rag_service):
 
     with col4:
         st.markdown(
-            f"""<div class="metric-card">
+            """<div class="metric-card">
                 <div class="metric-label">Unanswerable Handling</div>
                 <div class="metric-value">1.000 <span style="font-size:14px; color:#10b981;">(100%)</span></div>
                 <div class="metric-delta">Adversarial rejection</div>
@@ -84,15 +91,39 @@ def render_benchmark_view(rag_service):
         with open(eval_file, "r", encoding="utf-8") as f:
             golden_cases = json.load(f)
 
-        with st.expander(f"Inspect Golden Test Cases ({len(golden_cases)} Curated Benchmark Queries)", expanded=False):
-            for i, case in enumerate(golden_cases, 1):
-                st.markdown(
-                    f"""<div style="background:#111827; border:1px solid #1f2937; border-radius:6px; padding:12px; margin-bottom:10px;">
-                        <div style="font-weight:600; color:#38bdf8; font-size:13px;">Test Case #{i}: {case.get('id')} ({case.get('ticker')})</div>
-                        <div style="font-size:14px; margin-top:4px;"><strong>Query:</strong> {case.get('query')}</div>
-                        <div style="font-size:12px; color:#94a3b8; margin-top:4px;"><strong>Target Doc:</strong> {case.get('expected_document')} | <strong>Category:</strong> {case.get('category')}</div>
-                        <div style="font-size:12px; color:#cbd5e1; margin-top:6px; background:#030712; padding:8px; border-radius:4px;"><strong>Ground Truth:</strong> {case.get('ground_truth_answer')}</div>
-                    </div>""",
-                    unsafe_allow_html=True
-                )
+        st.markdown(f"#### Golden Benchmark Audit Queries ({len(golden_cases)} Curated Cases)")
+        
+        # Live query execution helper
+        case_options = [f"#{i+1}: {c.get('id')} - {c.get('query')[:70]}..." for i, c in enumerate(golden_cases)]
+        selected_idx = st.selectbox("Select Golden Case to execute live via Render API:", range(len(case_options)), format_func=lambda x: case_options[x])
+        selected_case = golden_cases[selected_idx]
 
+        st.markdown(
+            f"""<div style="background:#111827; border:1px solid #1f2937; border-radius:6px; padding:12px; margin-bottom:10px;">
+                <div style="font-weight:600; color:#38bdf8; font-size:13px;">Selected: {selected_case.get('id')} ({selected_case.get('ticker')})</div>
+                <div style="font-size:14px; margin-top:4px;"><strong>Query:</strong> {selected_case.get('query')}</div>
+                <div style="font-size:12px; color:#94a3b8; margin-top:4px;"><strong>Target Doc:</strong> {selected_case.get('expected_document')} | <strong>Category:</strong> {selected_case.get('category')}</div>
+                <div style="font-size:12px; color:#cbd5e1; margin-top:6px; background:#030712; padding:8px; border-radius:4px;"><strong>Expected Ground Truth:</strong> {selected_case.get('ground_truth_answer')}</div>
+            </div>""",
+            unsafe_allow_html=True
+        )
+
+        if st.button("Run Live Benchmark Query on Render Backend", type="primary"):
+            with st.spinner("Submitting query to remote FastAPI backend..."):
+                try:
+                    resp = api.execute_query(
+                        query=selected_case.get("query"),
+                        ticker=selected_case.get("ticker"),
+                        use_reranker=True,
+                        use_semantic_cache=True
+                    )
+                    st.success(f"Response received in {resp.total_latency_ms:.1f}ms (Cache: {resp.cache_hit_type or 'Miss'})")
+                    st.markdown(f"**Synthesized Answer:**\n\n{resp.answer}")
+                    if resp.citations:
+                        st.markdown("**Citations:**")
+                        for cit in resp.citations:
+                            st.write(f"- [{cit.citation_id}] {cit.document_title} (confidence: {cit.confidence_score:.2f})")
+                except AlphaLensAPIError as e:
+                    st.error(f"API Error: {e.message}")
+                except Exception as e:
+                    st.error(f"Execution error: {str(e)}")

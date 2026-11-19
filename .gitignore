@@ -10,5 +10,6 @@ data/chroma_db/
 data/load_stats*
 data/*.db
 *.log
+.streamlit/secrets.toml
 
 

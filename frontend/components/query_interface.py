@@ -9,9 +9,18 @@ import streamlit as st
 import time
 from typing import Dict, Any, List
 from frontend.styles import divider_html
+from frontend.api_client import (
+    api_client as default_api_client,
+    APIConnectionError,
+    APIAuthenticationError,
+    APIRateLimitError,
+    APITimeoutError,
+    AlphaLensAPIError
+)
 
 
-def render_query_interface(rag_service):
+def render_query_interface(client=None):
+    api = client or default_api_client
     st.subheader("Financial Intelligence Terminal")
     st.caption("Ask grounded questions over 10-Q SEC filings and earnings call transcripts.")
 
@@ -78,12 +87,15 @@ def render_query_interface(rag_service):
             
             # Map ticker filter
             ticker_param = None if ticker == "ALL" else ticker
+            use_reranker = "Reranker" in retrieval_strategy
 
-            # Execute query
+            # Execute query via remote backend API
             try:
-                response = rag_service.answer(
+                response = api.execute_query(
                     query=user_query.strip(),
-                    ticker=ticker_param
+                    ticker=ticker_param,
+                    use_reranker=use_reranker,
+                    use_semantic_cache=True
                 )
                 exec_time = (time.perf_counter() - start_time) * 1000.0
 
@@ -101,13 +113,13 @@ def render_query_interface(rag_service):
                     )
 
                 with mcol2:
-                    cache_status = "L1 Exact Hit" if response.is_cache_hit else "Cache Miss"
+                    cache_status = "L1 Exact Hit" if response.cache_hit_type == "exact" else ("L2 Semantic Hit" if response.cache_hit_type == "semantic" else "Cache Miss")
                     badge_class = "badge-green" if response.is_cache_hit else "badge-purple"
                     st.markdown(
                         f"""<div class="metric-card">
                             <div class="metric-label">Cache Status</div>
                             <div class="metric-value"><span class="{badge_class}">{cache_status}</span></div>
-                            <div class="metric-delta">Cosine Sim &gt;= 0.94</div>
+                            <div class="metric-delta">Two-Tier Redis State</div>
                         </div>""",
                         unsafe_allow_html=True
                     )
@@ -137,7 +149,7 @@ def render_query_interface(rag_service):
                         f"""<div class="metric-card">
                             <div class="metric-label">Query Cost</div>
                             <div class="metric-value">${response.estimated_cost_usd:.5f}</div>
-                            <div class="metric-delta">Ollama Zero Cost</div>
+                            <div class="metric-delta">Tokens: {response.tokens_used}</div>
                         </div>""",
                         unsafe_allow_html=True
                     )
@@ -181,7 +193,17 @@ def render_query_interface(rag_service):
                             unsafe_allow_html=True
                         )
 
+            except APIConnectionError as e:
+                st.error(f"Backend Offline or Cold-Starting: {e.message}")
+                st.info("If deploying on Render free tier, the web service spins down after inactivity and may take ~30-50s to wake up.")
+            except APIAuthenticationError as e:
+                st.error(f"Authentication Error: {e.message}")
+            except APIRateLimitError as e:
+                st.warning(f"Rate Limit Exceeded: {e.message}")
+            except APITimeoutError as e:
+                st.warning(f"Request Timeout: {e.message}")
+            except AlphaLensAPIError as e:
+                st.error(f"API Error: {e.message}")
             except Exception as e:
                 st.error(f"Execution Error: {str(e)}")
-                st.exception(e)
 

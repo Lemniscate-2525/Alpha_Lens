@@ -54,11 +54,20 @@ async def test_async_ingestion_api_returns_202_immediately_and_worker_processes(
 
     # Now simulate independent worker consuming the task
     worker = IngestionWorker(worker_id="test-worker-1")
-    task = await ingestion_queue.dequeue(worker_id=worker.worker_id, block_ms=500)
-    if task:
+    target_msg_id = None
+    for _ in range(10):
+        task = await ingestion_queue.dequeue(worker_id=worker.worker_id, block_ms=500)
+        if not task:
+            break
         msg_id, fields = task
-        assert fields["job_id"] == job_id
-        await worker._process_task(job_id, msg_id)
+        if fields.get("job_id") == job_id:
+            target_msg_id = msg_id
+            await worker._process_task(job_id, msg_id)
+            break
+        else:
+            await ingestion_queue.acknowledge(msg_id)
+
+    assert target_msg_id is not None, f"Expected job '{job_id}' to be dequeued from stream"
 
     # Re-check job status -> MUST BE COMPLETED or SKIPPED_EXISTING
     completed_job = await job_registry.get_job(job_id)
