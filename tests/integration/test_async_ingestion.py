@@ -52,17 +52,13 @@ async def test_async_ingestion_api_returns_202_immediately_and_worker_processes(
     assert job_in_redis is not None
     assert job_in_redis.document_id == "MSFT_2024_Q4_earnings_call_transcript"
 
-    # Now simulate independent worker consuming tasks until our job is processed
+    # Now simulate independent worker consuming the task
     worker = IngestionWorker(worker_id="test-worker-1")
-    for _ in range(10):
-        task = await ingestion_queue.dequeue(worker_id=worker.worker_id, block_ms=500)
-        if not task:
-            break
+    task = await ingestion_queue.dequeue(worker_id=worker.worker_id, block_ms=500)
+    if task:
         msg_id, fields = task
-        curr_job = fields.get("job_id")
-        await worker._process_task(curr_job, msg_id)
-        if curr_job == job_id:
-            break
+        assert fields["job_id"] == job_id
+        await worker._process_task(job_id, msg_id)
 
     # Re-check job status -> MUST BE COMPLETED or SKIPPED_EXISTING
     completed_job = await job_registry.get_job(job_id)
@@ -113,3 +109,4 @@ async def test_async_ingestion_idempotency_prevents_duplicate_chunks():
 
     # Chunk count in vector store must NOT have increased!
     assert vector_store.count() == initial_chunk_count
+

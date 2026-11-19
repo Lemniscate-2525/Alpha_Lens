@@ -76,6 +76,46 @@ def create_app() -> FastAPI:
     app.include_router(query.router, prefix="/api/v1")
     app.include_router(ingest.router, prefix="/api/v1")
 
+    # Root & Cloud Health Check Endpoints
+    @app.get("/", tags=["Root"])
+    @app.head("/", tags=["Root"])
+    async def root_status():
+        """Root status probe and API directory."""
+        return {
+            "status": "healthy",
+            "app_name": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "environment": settings.ENVIRONMENT.value,
+            "docs_url": "/docs",
+            "health_url": "/api/v1/health",
+            "message": "AlphaLens Production Financial RAG Engine is online.",
+            "endpoints": {
+                "documentation": "/docs",
+                "health": "/api/v1/health",
+                "metrics": "/api/v1/metrics",
+                "query": "/api/v1/query",
+                "ingest": "/api/v1/ingest",
+                "jobs": "/api/v1/ingest/jobs"
+            }
+        }
+
+    @app.get("/health", tags=["Observability"])
+    @app.head("/health", tags=["Observability"])
+    async def root_health():
+        """Root-level health probe for cloud load balancers (Render, AWS, GCP, etc.)."""
+        from src.infrastructure.redis_client import redis_manager
+        from src.database.vector_store import vector_store
+        redis_healthy = await redis_manager.check_health()
+        chunk_count = vector_store.count()
+        return {
+            "status": "healthy" if redis_healthy else "degraded",
+            "app_name": settings.APP_NAME,
+            "version": settings.APP_VERSION,
+            "environment": settings.ENVIRONMENT.value,
+            "redis_connected": redis_healthy,
+            "indexed_chunks": chunk_count,
+        }
+
     @app.on_event("startup")
     async def startup_event():
         logger.info(f"{settings.APP_NAME} v{settings.APP_VERSION} initialized successfully.")

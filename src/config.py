@@ -9,9 +9,10 @@ from typing import Optional
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Prevent huggingface from making slow network/DNS checks on local cached models
-os.environ["HF_HUB_OFFLINE"] = "1"
-os.environ["TRANSFORMERS_OFFLINE"] = "1"
+# Prevent huggingface from making slow network checks only if explicitly testing offline
+if os.getenv("ENVIRONMENT") == "testing":
+    os.environ.setdefault("HF_HUB_OFFLINE", "1")
+    os.environ.setdefault("TRANSFORMERS_OFFLINE", "1")
 
 
 class EnvironmentType(str, Enum):

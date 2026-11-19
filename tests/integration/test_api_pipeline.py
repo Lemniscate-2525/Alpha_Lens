@@ -11,6 +11,25 @@ client = TestClient(app)
 AUTH_HEADERS = {"X-API-Key": "alpha-lens-master-key-prod-2025"}
 
 
+def test_root_endpoint_get_and_head():
+    """Verifies that GET / and HEAD / return 200 for cloud health checks (Render, AWS, etc.)."""
+    get_resp = client.get("/")
+    assert get_resp.status_code == 200
+    data = get_resp.json()
+    assert data["status"] == "healthy"
+    assert "endpoints" in data
+
+    head_resp = client.head("/")
+    assert head_resp.status_code == 200
+
+
+def test_root_health_endpoint():
+    """Verifies that /health returns 200 for load balancer liveness checks."""
+    resp = client.get("/health")
+    assert resp.status_code == 200
+    assert resp.json()["status"] in ["healthy", "degraded"]
+
+
 def test_health_endpoint():
     response = client.get("/api/v1/health")
     assert response.status_code == 200

@@ -21,10 +21,16 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID", f"req-{uuid.uuid4().hex[:10]}")
         request.state.request_id = request_id
 
-        # Admission control / Rate limit check (bypass for health/metrics)
+        # Admission control / Rate limit check (bypass for health, docs, and telemetry)
         path = request.url.path
         rate_limit_res = None
-        if not path.startswith("/api/v1/health") and not path.startswith("/api/v1/metrics"):
+        bypass_paths = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"}
+        should_bypass = (
+            path in bypass_paths
+            or path.startswith("/api/v1/health")
+            or path.startswith("/api/v1/metrics")
+        )
+        if not should_bypass:
             client_ip = request.client.host if request.client else "unknown_client"
             client_id = request.headers.get("X-API-Key", client_ip)
             try:

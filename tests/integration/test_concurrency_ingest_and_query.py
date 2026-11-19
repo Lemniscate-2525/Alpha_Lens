@@ -8,7 +8,7 @@ import asyncio
 from pathlib import Path
 import time
 import pytest
-import httpx
+from starlette.testclient import TestClient
 
 from src.api.app import app
 from src.core.models import JobStatus, QueryRequest
@@ -18,6 +18,7 @@ from src.workers.queue_service import ingestion_queue
 from src.workers.ingestion_worker import IngestionWorker
 from src.retrieval.sparse import bm25_retriever
 
+client = TestClient(app)
 AUTH_HEADERS = {"X-API-Key": "alpha-lens-master-key-prod-2025"}
 
 
@@ -61,9 +62,8 @@ async def test_concurrent_llm_generation_and_background_ingestion():
         await query_in_flight.wait()
         t0 = time.perf_counter()
 
-        # Submit ingestion job via async client so event loop is not blocked
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://test") as ac:
-            resp = await ac.post("/api/v1/ingest", json={"json_document": payload_text}, headers=AUTH_HEADERS)
+        # Submit ingestion job
+        resp = client.post("/api/v1/ingest", json={"json_document": payload_text}, headers=AUTH_HEADERS)
         assert resp.status_code == 202
         job_id = resp.json()["job_id"]
 
@@ -96,3 +96,4 @@ async def test_concurrent_llm_generation_and_background_ingestion():
     bm25_retriever.sync_if_needed()
     results = bm25_retriever.retrieve("Blackwell", top_k=5)
     assert len(results) > 0, "Newly indexed documents must be visible to retrieval!"
+

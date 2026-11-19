@@ -47,23 +47,6 @@ class IngestionPipeline:
         start_time = time.perf_counter()
         client = await redis_manager.get_async_client()
 
-        # Ensure job is registered in Redis if invoked directly
-        existing_job = await job_registry.get_job(job_id)
-        if not existing_job:
-            try:
-                parsed_peek = FinancialDocumentParser.parse_json_document(raw_payload)
-                peek_doc_id = parsed_peek.document_id
-                peek_ticker = parsed_peek.ticker
-            except Exception:
-                peek_doc_id = "unknown"
-                peek_ticker = "UNKNOWN"
-            await job_registry.register_job(
-                job_id=job_id,
-                document_id=peek_doc_id,
-                ticker=peek_ticker,
-                raw_payload=raw_payload
-            )
-
         # Step 1: Parsing
         await job_registry.update_job(
             job_id,
@@ -103,18 +86,6 @@ class IngestionPipeline:
                     processing_time_ms=round(duration_ms, 2),
                     message="Document already indexed (idempotency hit; content unchanged)"
                 )
-                if not job:
-                    job = IngestionJob(
-                        job_id=job_id,
-                        document_id=doc.document_id,
-                        ticker=doc.ticker,
-                        status=JobStatus.SKIPPED_EXISTING,
-                        stage="IDEMPOTENT_SKIPPED",
-                        progress=100,
-                        processing_time_ms=round(duration_ms, 2),
-                        message="Document already indexed (idempotency hit; content unchanged)"
-                    )
-                self._jobs[job_id] = job
                 metrics_collector.record_job_completed()
                 return job
 
@@ -197,19 +168,6 @@ class IngestionPipeline:
                 processing_time_ms=round(duration_ms, 2),
                 message="Successfully parsed, embedded, and indexed document"
             )
-            if not job:
-                job = IngestionJob(
-                    job_id=job_id,
-                    document_id=doc.document_id,
-                    ticker=doc.ticker,
-                    status=JobStatus.COMPLETED,
-                    stage="COMPLETED",
-                    progress=100,
-                    total_parent_chunks=len(parent_chunks),
-                    total_child_chunks=len(child_chunks),
-                    processing_time_ms=round(duration_ms, 2),
-                    message="Successfully parsed, embedded, and indexed document"
-                )
             self._jobs[job_id] = job
             metrics_collector.record_job_completed()
             logger.info(
