@@ -11,6 +11,8 @@ services:
         value: 3.11.9
       - key: ENVIRONMENT
         value: production
+      - key: MASTER_API_KEY
+        value: alpha-lens-master-key-prod-2025
       - key: REDIS_URL
         fromService:
           type: redis
@@ -20,6 +22,10 @@ services:
         value: groq
       - key: HF_HUB_OFFLINE
         value: "0"
+      - key: OMP_NUM_THREADS
+        value: "1"
+      - key: MALLOC_TRIM_THRESHOLD_
+        value: "65536"
 
   # AlphaLens Background Ingestion Worker
   - type: worker

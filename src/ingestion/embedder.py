@@ -20,6 +20,12 @@ class EmbeddingService:
     def _get_model(self):
         if self._model is None:
             logger.info(f"Loading embedding model: {self.model_name}")
+            try:
+                import torch
+                torch.set_num_threads(1)
+                torch.set_grad_enabled(False)
+            except Exception:
+                pass
             from sentence_transformers import SentenceTransformer
             self._model = SentenceTransformer(self.model_name)
         return self._model

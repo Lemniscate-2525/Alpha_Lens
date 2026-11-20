@@ -205,8 +205,10 @@ class AlphaLensAPIClient:
         json: Optional[Any] = None,
         params: Optional[Dict[str, Any]] = None,
         files: Optional[Any] = None,
-        data: Optional[Any] = None
+        data: Optional[Any] = None,
+        max_retries: int = 2
     ) -> httpx.Response:
+        import time
         client = self._get_client()
         url = f"{self.base_url}/{path.lstrip('/')}"
         headers = {
@@ -214,30 +216,48 @@ class AlphaLensAPIClient:
             "Accept": "application/json",
             "User-Agent": "AlphaLens-Streamlit-Client/1.0"
         }
-        try:
-            response = client.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=json,
-                params=params,
-                files=files,
-                data=data
-            )
-        except httpx.ConnectTimeout:
-            raise APIConnectionError(
-                f"Connection timed out while contacting {self.base_url}. The Render container may be starting up."
-            )
-        except httpx.ReadTimeout:
-            raise APITimeoutError(
-                "Request timed out waiting for generation to complete on the backend."
-            )
-        except (httpx.ConnectError, httpx.NetworkError) as e:
-            raise APIConnectionError(
-                f"Unable to connect to AlphaLens API at {self.base_url}. Verify backend availability and network."
-            )
-        except Exception as e:
-            raise AlphaLensAPIError(f"Unexpected network transport error: {str(e)}")
+
+        response = None
+        for attempt in range(max_retries + 1):
+            try:
+                response = client.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=json,
+                    params=params,
+                    files=files,
+                    data=data
+                )
+            except httpx.ConnectTimeout:
+                if attempt < max_retries:
+                    time.sleep(1.5)
+                    continue
+                raise APIConnectionError(
+                    f"Connection timed out while contacting {self.base_url}. The Render container may be starting up."
+                )
+            except httpx.ReadTimeout:
+                raise APITimeoutError(
+                    "Request timed out waiting for generation to complete on the backend."
+                )
+            except (httpx.ConnectError, httpx.NetworkError) as e:
+                if attempt < max_retries:
+                    time.sleep(1.5)
+                    continue
+                raise APIConnectionError(
+                    f"Unable to connect to AlphaLens API at {self.base_url}. Verify backend availability and network."
+                )
+            except Exception as e:
+                raise AlphaLensAPIError(f"Unexpected network transport error: {str(e)}")
+
+            # If gateway error (502 Bad Gateway / 503 / 504), Render may be finishing boot
+            if response.status_code in (502, 503, 504) and attempt < max_retries:
+                time.sleep(2.0)
+                continue
+            break
+
+        if response is None:
+            raise APIConnectionError(f"No response received from {self.base_url}")
 
         if response.status_code == 401:
             raise APIAuthenticationError(
@@ -249,6 +269,12 @@ class AlphaLensAPIClient:
             raise APIRateLimitError(
                 f"Rate limit exceeded on backend. Please wait {retry_after}s before retrying.",
                 retry_after=retry_after
+            )
+        elif response.status_code in (502, 503, 504):
+            raise APIConnectionError(
+                f"Backend service is waking up or temporarily unavailable (HTTP {response.status_code}). "
+                "Render free tier spins down on idle and takes ~30-50 seconds to initialize. Please wait a moment and retry.",
+                status_code=response.status_code
             )
         elif response.status_code >= 400:
             try:
