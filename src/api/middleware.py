@@ -21,14 +21,22 @@ class ObservabilityMiddleware(BaseHTTPMiddleware):
         request_id = request.headers.get("X-Request-ID", f"req-{uuid.uuid4().hex[:10]}")
         request.state.request_id = request_id
 
-        # Admission control / Rate limit check (bypass for health, docs, and telemetry)
+        # Admission control / Rate limit check (bypass for health, docs, telemetry, document lists, and master keys)
         path = request.url.path
         rate_limit_res = None
         bypass_paths = {"/", "/health", "/docs", "/redoc", "/openapi.json", "/favicon.ico"}
+        incoming_key = request.headers.get("X-API-Key", "")
+        is_master = incoming_key in {
+            "alpha-lens-master-key-prod-2025",
+            "alphalens_prod_secret_key_change_in_production",
+        }
         should_bypass = (
-            path in bypass_paths
+            is_master
+            or path in bypass_paths
             or path.startswith("/api/v1/health")
             or path.startswith("/api/v1/metrics")
+            or path.startswith("/api/v1/ingest/documents")
+            or path.startswith("/api/v1/ingest/jobs")
         )
         if not should_bypass:
             client_ip = request.client.host if request.client else "unknown_client"

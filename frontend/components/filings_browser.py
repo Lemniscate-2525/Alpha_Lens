@@ -94,7 +94,38 @@ def render_filings_browser(client=None):
     with tab1:
         st.markdown("#### Indexed Documents in Production Corpus")
         if not documents:
-            st.info("No documents currently indexed in backend vector store. Upload a document below.")
+            st.info("No documents are currently indexed in the backend vector store. Click below to automatically ingest the bundled sample filings, or upload your own in Tab 2.")
+            icol1, icol2 = st.columns([1, 1])
+            with icol1:
+                if st.button("⚡ Ingest MSFT Q4 FY24 Transcript", type="primary", use_container_width=True):
+                    from pathlib import Path
+                    sample_path = Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "msft_q4_2024_transcript.json"
+                    if sample_path.exists():
+                        try:
+                            with st.spinner("Submitting MSFT transcript to backend..."):
+                                content = sample_path.read_text(encoding="utf-8")
+                                job_res = api.upload_document_json(content)
+                                st.success(f"Submitted MSFT transcript! Job ID: {job_res.get('job_id')}")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to submit: {e}")
+                    else:
+                        st.error(f"Sample file not found at {sample_path}")
+            with icol2:
+                if st.button("⚡ Ingest NVDA Q2 FY25 Transcript", type="secondary", use_container_width=True):
+                    from pathlib import Path
+                    sample_path = Path(__file__).resolve().parent.parent.parent / "data" / "raw" / "nvda_q2_2025_transcript.json"
+                    if sample_path.exists():
+                        try:
+                            with st.spinner("Submitting NVDA transcript to backend..."):
+                                content = sample_path.read_text(encoding="utf-8")
+                                job_res = api.upload_document_json(content)
+                                st.success(f"Submitted NVDA transcript! Job ID: {job_res.get('job_id')}")
+                                st.rerun()
+                        except Exception as e:
+                            st.error(f"Failed to submit: {e}")
+                    else:
+                        st.error(f"Sample file not found at {sample_path}")
         else:
             for doc in documents:
                 doc_id = doc.get("document_id", "Unknown")

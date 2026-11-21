@@ -42,6 +42,9 @@ class NeuralReranker:
             return []
 
         top_k = top_k or self.top_k
+        if not settings.USE_RERANKER:
+            return candidates[:top_k]
+
         pairs = [[query, c.content] for c in candidates]
 
         try:
