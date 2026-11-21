@@ -17,4 +17,6 @@ fakeredis>=2.20.0
 starlette>=0.38.0
 python-multipart>=0.0.9
 redis>=5.0.0
+fastembed>=0.3.0
+onnxruntime>=1.18.0
 

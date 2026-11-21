@@ -68,13 +68,14 @@ class Settings(BaseSettings):
     REDIS_KEY_PREFIX: str = "alpha_lens"
 
     # Embedding Model
+    USE_FASTEMBED: bool = True
     EMBEDDING_MODEL_NAME: str = "all-MiniLM-L6-v2"
     EMBEDDING_DIMENSION: int = 384
     EMBEDDING_BATCH_SIZE: int = 32
 
     # Reranker Model
     RERANKER_MODEL_NAME: str = "cross-encoder/ms-marco-MiniLM-L-6-v2"
-    USE_RERANKER: bool = True
+    USE_RERANKER: bool = False
     RERANKER_TOP_K: int = 5
     RERANKER_MIN_SCORE_THRESHOLD: float = 0.20
 

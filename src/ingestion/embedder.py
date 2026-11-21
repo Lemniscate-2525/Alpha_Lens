@@ -15,19 +15,39 @@ class EmbeddingService:
         self.model_name = model_name or settings.EMBEDDING_MODEL_NAME
         self.dimension = settings.EMBEDDING_DIMENSION
         self._model = None
+        self._is_fastembed = False
         self._cache = {}
 
     def _get_model(self):
-        if self._model is None:
-            logger.info(f"Loading embedding model: {self.model_name}")
+        if self._model is not None:
+            return self._model
+
+        # Attempt to load ultra-lightweight FastEmbed (ONNX Runtime, ~180MB RAM vs 450MB+ PyTorch)
+        if getattr(settings, "USE_FASTEMBED", True):
             try:
-                import torch
-                torch.set_num_threads(1)
-                torch.set_grad_enabled(False)
-            except Exception:
-                pass
-            from sentence_transformers import SentenceTransformer
-            self._model = SentenceTransformer(self.model_name)
+                from fastembed import TextEmbedding
+                fastembed_name = (
+                    "sentence-transformers/all-MiniLM-L6-v2"
+                    if "all-MiniLM-L6-v2" in self.model_name
+                    else self.model_name
+                )
+                logger.info(f"Loading FastEmbed (ONNX Runtime) embedding model: {fastembed_name}")
+                self._model = TextEmbedding(model_name=fastembed_name)
+                self._is_fastembed = True
+                return self._model
+            except Exception as e:
+                logger.warning(f"FastEmbed initialization skipped ({e}); falling back to SentenceTransformers.")
+
+        logger.info(f"Loading SentenceTransformers embedding model: {self.model_name}")
+        try:
+            import torch
+            torch.set_num_threads(1)
+            torch.set_grad_enabled(False)
+        except Exception:
+            pass
+        from sentence_transformers import SentenceTransformer
+        self._model = SentenceTransformer(self.model_name)
+        self._is_fastembed = False
         return self._model
 
     def embed_text(self, text: str) -> List[float]:
@@ -36,12 +56,18 @@ class EmbeddingService:
             return self._cache[text]
 
         model = self._get_model()
-        embedding = model.encode(
-            text,
-            normalize_embeddings=True,
-            show_progress_bar=False
-        )
-        vec = embedding.tolist()
+        if self._is_fastembed:
+            raw_vec = list(model.embed([text]))[0]
+            norm = np.linalg.norm(raw_vec)
+            vec = (raw_vec / norm).tolist() if norm > 0 else raw_vec.tolist()
+        else:
+            embedding = model.encode(
+                text,
+                normalize_embeddings=True,
+                show_progress_bar=False
+            )
+            vec = embedding.tolist()
+
         if len(self._cache) < 5000:
             self._cache[text] = vec
         return vec
@@ -53,13 +79,23 @@ class EmbeddingService:
 
         batch_size = batch_size or settings.EMBEDDING_BATCH_SIZE
         model = self._get_model()
-        embeddings = model.encode(
-            texts,
-            batch_size=batch_size,
-            normalize_embeddings=True,
-            show_progress_bar=False
-        )
-        return embeddings.tolist()
+
+        if self._is_fastembed:
+            embeddings_list = list(model.embed(texts, batch_size=batch_size))
+            result = []
+            for raw_vec in embeddings_list:
+                norm = np.linalg.norm(raw_vec)
+                vec = (raw_vec / norm).tolist() if norm > 0 else raw_vec.tolist()
+                result.append(vec)
+            return result
+        else:
+            embeddings = model.encode(
+                texts,
+                batch_size=batch_size,
+                normalize_embeddings=True,
+                show_progress_bar=False
+            )
+            return embeddings.tolist()
 
 
 # Global singleton instance
