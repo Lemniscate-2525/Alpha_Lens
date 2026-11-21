@@ -60,11 +60,17 @@ async def ingest_document(
     )
 
     # Enqueue task in Redis Stream
-    await ingestion_queue.enqueue(
+    msg_id = await ingestion_queue.enqueue(
         job_id=job_id,
         document_id=doc.document_id,
         ticker=doc.ticker
     )
+
+    # Immediately trigger processing in the background (ensures execution even on single-container cloud hosting)
+    import asyncio
+    from src.workers.ingestion_worker import IngestionWorker
+    _worker = IngestionWorker(worker_id="api-direct-worker")
+    asyncio.create_task(_worker._process_task(job_id, msg_id))
 
     logger.info(f"Accepted document '{doc.document_id}' for async processing. Job ID: {job_id}")
     return job

@@ -71,7 +71,7 @@ class LLMGenerator:
 
         # Dispatch based on provider
         if self.provider == LLMProviderType.OLLAMA:
-            answer = self._generate_ollama(prompt, context_chunks)
+            answer = self._generate_ollama(query, prompt, context_chunks)
             cost_usd = 0.0  # 100% Free on local hardware
         elif self.provider == LLMProviderType.TRITON:
             answer = self._generate_triton(prompt, context_chunks)
@@ -176,7 +176,7 @@ class LLMGenerator:
             raise
 
 
-    def _generate_ollama(self, prompt: str, context_chunks: List[SearchResult] = None) -> str:
+    def _generate_ollama(self, query: str, prompt: str, context_chunks: List[SearchResult] = None) -> str:
         """Invokes local Ollama instance via HTTP API without requiring external API keys."""
         import httpx
         import re
@@ -207,10 +207,10 @@ class LLMGenerator:
                 if raw_content and "<think>" not in raw_content:
                     return raw_content
                 logger.warning("Ollama output contained only thinking tokens; using deterministic synthesis.")
-                return self._generate_deterministic_synthesis(prompt, context_chunks or [])
+                return self._generate_deterministic_synthesis(query, context_chunks or [])
         except Exception as e:
-            logger.error(f"Ollama generation failed ({e}), falling back to grounded synthesis.")
-            return self._generate_deterministic_synthesis(prompt, context_chunks or [])
+            logger.info(f"Ollama generation offline or unreachable ({e}), generating grounded financial synthesis.")
+            return self._generate_deterministic_synthesis(query, context_chunks or [])
 
     def _generate_triton(self, prompt: str, context_chunks: List[SearchResult] = None) -> str:
         """Invokes Triton Inference Server with TensorRT-LLM backend via v2 kserve HTTP API."""

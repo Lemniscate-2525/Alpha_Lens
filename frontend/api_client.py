@@ -237,8 +237,9 @@ class AlphaLensAPIClient:
                     f"Connection timed out while contacting {self.base_url}. The Render container may be starting up."
                 )
             except httpx.ReadTimeout:
+                action_label = "query generation" if "query" in path else f"operation ({path})"
                 raise APITimeoutError(
-                    "Request timed out waiting for generation to complete on the backend."
+                    f"Request timed out waiting for {action_label} to complete on the backend."
                 )
             except (httpx.ConnectError, httpx.NetworkError) as e:
                 if attempt < max_retries:
